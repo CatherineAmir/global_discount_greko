@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+	<data>
+
+		<record id="res_partner_form_discount_inherit" model="ir.ui.view">
+			<field name="name">partner.res_partner.form</field>
+			<field name="model">res.partner</field>
+			<field name="inherit_id" ref="product.view_partner_property_form"/>
+			<field name="priority" eval="8"/>
+			<field name="arch" type="xml">
+				<xpath expr="//field[@name='property_product_pricelist']" position="after">
+					<field name="discount_type" force_save="1" readonly="0"/>
+					<field name="discount_amount" force_save="1" readonly="0"/>
+				</xpath>
+
+			</field>
+		</record>
+	</data>
+</odoo>

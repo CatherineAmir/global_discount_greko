@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+	<record id="inherit_view_move_form" model="ir.ui.view">
+		<field name="name">account.move.inherit</field>
+		<field name="model">account.move</field>
+		<field name="inherit_id" ref="account.view_move_form"/>
+		<field name="arch" type="xml">
+<!--			<xpath expr="//field[@name='tax_totals_json']" position="before">-->
+<!--				<field name="discount"/>-->
+<!--			</xpath>-->
+			<xpath expr="//form/sheet/notebook/page/group" position="after">
+				<group>
+					<group>
+						<field name="discount_type" attrs="{'readonly': [('state', 'in', ['paid', 'cancel'])]}"/>
+						<field name="discount_amount" attrs="{'readonly': [('state', 'in', ['paid', 'cancel'])]}"/>
+					</group>
+				</group>
+			</xpath>
+		</field>
+	</record>
+
+	<record id="res_config_settings_inherit_view" model="ir.ui.view">
+		<field name="name">res.config.settings.view.form.inherit</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="account.res_config_settings_view_form"/>
+		<field name="arch" type="xml">
+			<xpath expr="//div[@name='fiscal_localization_setting_container']" position="after">
+				<h2>Global Discount</h2>
+				<div class="row mt16 o_settings_container" name="default_discount_setting_container">
+				 	<div class="col-12 col-lg-6 o_setting_box" id="default_discount" >
+                    	<div class="o_setting_left_pane"/>
+                    	<div class="o_setting_right_pane">
+                        	<span class="o_form_label">Global Discount</span>
+                        	<span class="fa fa-lg fa-building-o"/>
+	                        <div class="text-muted">
+	                            Default Discount applied to local transactions
+	                        </div>
+	                        <div class="content-group">
+	                            <div class="row mt16">
+	                                <label string="Global Discount" for="discount_id" class="col-lg-3 o_light_label"/>
+	                                <field name="discount_id"/>
+	                            </div>
+	                        </div>
+	                    </div>
+	                </div>
+	            </div>
+<!-- 
+
+				<div class="row mt16 o_settings_container" id="global-discount">
+					<div class="col-12 col-lg-6 o_setting_box">
+						<div class="o_setting_left_pane"/>
+						<div class="o_setting_right_pane">
+							<div class="content-group">
+								<div class="row mt16">
+                            		<field name="discount_id"/>
+                            	</div>
+                            </div>
+                        </div>
+					</div>
+				</div> -->
+			</xpath>
+		</field>
+	</record>
+</odoo>
