@@ -11,13 +11,13 @@ class sale_order(models.Model):
         [("fixed", "Fixed"), ("percentage", "Percentage")], string="Discount Type",related='partner_id.discount_type',store=1
     )
     discount_amount = fields.Float("Discount Amount",related='partner_id.discount_amount',store=1)
-    discount = fields.Float("Discount", compute="_calculate_discount", store=True,tracking=5)
+    discount = fields.Monetary("Discount", compute="calculate_discount", store=True,tracking=5)
 
     @api.constrains('discount_amount','discount_amount','order_line')
-    def calculate_discount(self):
-        self._calculate_discount()
-    @api.depends("discount_amount", "discount_type",'order_line')
     def _calculate_discount(self):
+        self.calculate_discount()
+    @api.depends("discount_amount", "discount_type",'order_line')
+    def calculate_discount(self):
         for rec in self:
             if rec.discount_amount < 0:
                 raise UserError(

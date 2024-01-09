@@ -7,7 +7,7 @@ class Partner(models.Model):
         [("fixed", "Fixed"), ("percentage", "Percentage")], string = "Discount Type",
     )
 
-    discount_amount = fields.Float("Discount Amount")
+    discount_amount = fields.Float("Discount Amount",)
 
     @api.onchange('child_ids', 'discount_type', 'discount_amount')
     def child_discount(self):

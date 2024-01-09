@@ -11,7 +11,7 @@ class account_invoice(models.Model):
         [("fixed", "Fixed"), ("percentage", "Percentage")], string="Discount Type"
     )
     discount_amount = fields.Float("Discount Amount")
-    discount = fields.Float("Discount", compute="calculate_discount", store=True)
+    discount = fields.Monetary("Discount", compute="calculate_discount", store=True,copy=False)
 
     @api.depends("discount_amount", "discount_type")
     def calculate_discount(self):
@@ -44,13 +44,14 @@ class account_invoice(models.Model):
     def create(self, vals):
         res = super(account_invoice, self).create(vals)
         if vals.get('discount_amount') or vals.get('discount_type'):
-            res.action_add_discount_journal_entry()
+            # res.action_add_discount_journal_entry()
+            pass
         return res
 
     def action_add_discount_journal_entry(self):
         discount = self.env["ir.default"].get("res.config.settings", "discount_id")
-        discount_line = self.invoice_line_ids.filtered(lambda a: a.account_id.id == discount and a.name == 'Discount')
-        journal_line = self.line_ids.filtered(lambda a: a.account_id.id == discount and a.name == 'Discount')
+        discount_line = self.invoice_line_ids.filtered(lambda a: a.account_id.id == discount or 'discount' in a.name.lower())
+        journal_line = self.line_ids.filtered(lambda a: a.account_id.id == discount or 'discount' in a.name.lower())
         vals = {
                     'name': 'Discount',
                     'price_unit': -abs(self.discount),
@@ -63,11 +64,12 @@ class account_invoice(models.Model):
                     'invoice_line_ids': [(0,0, vals)]
             })
         if discount_line:
-            raise UserError(
-                    _(
-                        "Discount is already added !!"
-                    )
-                )
+            pass
+            # raise UserError(
+            #         _(
+            #             "Discount is already added !!"
+            #         )
+            #     )
 
 class res_config_settings(models.TransientModel):
 
