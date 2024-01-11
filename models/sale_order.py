@@ -36,6 +36,9 @@ class sale_order(models.Model):
                 rec.amount_total -= total
                 if rec.discount > rec.amount_untaxed:
                     raise UserError(_("Discount Must be less than amount"))
+            else:
+                rec.discount=0
+
 
     def _prepare_invoice(self):
         res = super(sale_order, self)._prepare_invoice()

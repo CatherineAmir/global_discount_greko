@@ -52,6 +52,9 @@ class account_invoice(models.Model):
         discount = self.env["ir.default"].get("res.config.settings", "discount_id")
         discount_line = self.invoice_line_ids.filtered(lambda a: a.account_id.id == discount or 'discount' in a.name.lower())
         journal_line = self.line_ids.filtered(lambda a: a.account_id.id == discount or 'discount' in a.name.lower())
+        # self.calculate_discount()
+        print('self.discount',self.discount)
+        print('self.discount_amount',self.discount_amount)
         vals = {
                     'name': 'Discount',
                     'price_unit': -abs(self.discount),
@@ -60,6 +63,7 @@ class account_invoice(models.Model):
                     'account_id': discount,
         }
         if not discount_line:
+            print('not discount_line')
             self.write({
                     'invoice_line_ids': [(0,0, vals)]
             })
