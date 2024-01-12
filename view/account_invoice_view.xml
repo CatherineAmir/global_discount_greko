@@ -13,6 +13,7 @@
 					<group>
 						<field name="discount_type" attrs="{'readonly': [('state', 'in', ['paid', 'cancel'])]}"/>
 						<field name="discount_amount" attrs="{'readonly': [('state', 'in', ['paid', 'cancel'])]}"/>
+						<field name="customer_discount" attrs="{'readonly': [('state', 'in', ['paid', 'cancel'])]}"/>
 					</group>
 				</group>
 			</xpath>
