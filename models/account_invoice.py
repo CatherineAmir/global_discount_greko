@@ -10,7 +10,7 @@ class AccountInvoice(models.Model):
     discount_type = fields.Selection(
         [("fixed", "Fixed"), ("percentage", "Percentage")], string="Discount Type",related='partner_id.discount_type')
     discount_amount = fields.Float("Discount Amount",related='partner_id.discount_amount',store=1)
-    customer_discount = fields.Monetary("Customer Discount", compute="calculate_customer_discount", store=True,copy=False)
+    customer_discount = fields.Monetary("Customer Discount", compute="calculate_customer_discount", store=True,copy=False,)
 
     @api.depends("discount_amount", "discount_type")
     def calculate_customer_discount(self):
