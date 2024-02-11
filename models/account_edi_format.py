@@ -40,10 +40,11 @@ class AccountEdiFormat(models.Model):
         })
         if invoice.ref:
             eta_invoice['purchaseOrderReference'] = invoice.ref
-        if invoice.extra_note.striptags() !='':
-            eta_invoice['salesOrderReference'] = invoice.extra_note.striptags()
+        if invoice.extra_note:
+            if invoice.extra_note.striptags() !='':
+                eta_invoice['salesOrderReference'] = invoice.extra_note.striptags()
 
-        print('eta_invoice',eta_invoice)
+        # print('eta_invoice',eta_invoice)
         return eta_invoice
 
     @api.model
