@@ -1,6 +1,7 @@
 from odoo import fields, models, api, _
 
-
+import logging
+_logger = logging.getLogger(__name__)
 class AccountEdiFormat(models.Model):
     _inherit = 'account.edi.format'
 
@@ -134,14 +135,18 @@ class AccountEdiFormat(models.Model):
 
     @api.model
     def _l10n_eg_eta_prepare_address_data(self, partner, invoice, issuer=False):
+        _logger.info("Partner come: {}".format(partner.name))
+        _logger.info("Partner is issuer : {}".format(issuer))
+        partner_name = partner.name
         if partner.parent_id:
             if  ']' in partner.parent_id.name or '[' in partner.parent_id.name :
                 partner_name=partner.parent_id.name.split(']')[1]+','+partner.name.split(']')[1]
             else:
                 partner_name=partner.parent_id.name+','+partner.name.split
         else:
-
-            partner_name=partner.name.split('[')[0]
+            if ']' in partner.name:
+                partner_name=partner.name.split(']')[1]
+        _logger.info("Partner name: {}".format(partner_name))
         address = {
             'address': {
                 'country': partner.country_id.code,
