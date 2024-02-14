@@ -1,7 +1,9 @@
 from odoo import fields, models, api, _
-
+import json
 import logging
+import  base64
 _logger = logging.getLogger(__name__)
+DEFAULT_BLOCKING_LEVEL = 'error'
 class AccountEdiFormat(models.Model):
     _inherit = 'account.edi.format'
 
@@ -167,27 +169,207 @@ class AccountEdiFormat(models.Model):
             address['id'] = partner.vat or ''
         return address
 
-    # @api.model
-    # def _l10n_eg_validate_info_address(self, partner_id, issuer=False, invoice=False):
-    #     fields = ["country_id",
-    #               "state_id", "city", "street",
-    #               "l10n_eg_building_no"]
-    #     print('type',partner_id.name,self._l10n_eg_get_partner_tax_type(partner_id, issuer))
-    #     if self._l10n_eg_get_partner_tax_type(partner_id, issuer)=='P':
-    #         fields=["country_id"]
-    #     if (
-    #             invoice and invoice.amount_total >= invoice.company_id.l10n_eg_invoicing_threshold) or self._l10n_eg_get_partner_tax_type(
-    #         partner_id, issuer) != 'P':
-    #         fields.append('vat')
-    #     print('all(partner_id[field] for field in fields)',all(partner_id[field] for field in fields))
-    #     print('fields',fields)
-    #     return all(partner_id[field] for field in fields)
+    # def _post_invoice_edi(self, invoices):
+    #     if self.code != 'eg_eta':
+    #         return super()._post_invoice_edi(invoices)
+    #     invoice = invoices  # Batching is disabled for this EDI.
     #
-    # @api.model
-    # def _l10n_eg_get_partner_tax_type(self, partner_id, issuer=False):
-    #     if issuer:
-    #         return 'B'
-    #     elif partner_id.commercial_partner_id.country_code == 'EG':
-    #         return 'B' if partner_id.commercial_partner_id.is_company and partner_id.commercial_partner_id.id != partner_id.id else 'P'
-    #     else:
-    #         return 'F'
+    #     # In case we have already sent it, but have not got a final answer yet.
+    #     if invoice.l10n_eg_submission_number:
+    #         return {invoice: self._l10n_eg_get_einvoice_status(invoice)}
+    #
+    #     if not invoice.l10n_eg_eta_json_doc_id:
+    #         return {
+    #             invoice: {
+    #                 'error': _("An error occured in created the ETA invoice, please retry signing"),
+    #                 'blocking_level': 'info'
+    #             }
+    #         }
+    #     invoice_json = json.loads(invoice.l10n_eg_eta_json_doc_id.raw)['request']
+    #     if not invoice_json.get('signatures'):
+    #         return {
+    #             invoice: {
+    #                 'error': _("Please make sure the invoice is signed"),
+    #                 'blocking_level': 'info'
+    #             }
+    #         }
+    #     return {invoice: self._l10n_eg_edi_post_invoice_web_service(invoice)}
+    #
+    #     @api.model
+    #     def _cron_process_documents_web_services(self, job_count=None):
+    #         ''' Method called by the EDI cron processing all web-services.
+    #
+    #         :param job_count: Limit explicitely the number of web service calls. If not provided, process all.
+    #         '''
+    #         edi_documents = self.search([('state', 'in', ('to_send', 'to_cancel')), ('move_id.state', '=', 'posted'), ('l10n_eg_is_signed','=',True)])
+    #         nb_remaining_jobs = edi_documents._process_documents_web_services(job_count=job_count)
+    #
+    #         # Mark the CRON to be triggered again asap since there is some remaining jobs to process.
+    #         if nb_remaining_jobs > 0:
+    #             self.env.ref('account_edi.ir_cron_edi_network')._trigger()
+    #
+    #         # action_retry_edi_documents_error
+
+    @api.model
+    def _process_job(self, documents, doc_type):
+        """Post or cancel move_id (invoice or payment) by calling the related methods on edi_format_id.
+        Invoices are processed before payments.
+
+        :param documents: The documents related to this job. If edi_format_id does not support batch, length is one
+        :param doc_type:  Are the moves of this job invoice or payments ?
+        """
+        # inherited
+        def _postprocess_post_edi_results(documents, edi_result):
+            attachments_to_unlink = self.env['ir.attachment']
+            for document in documents:
+                move = document.move_id
+                # new
+                if  move.error:
+                    move.action_retry_edi_documents_error()
+                move_result = edi_result.get(move, {})
+                if move_result.get('attachment'):
+                    old_attachment = document.attachment_id
+                    document.attachment_id = move_result['attachment']
+                    if not old_attachment.res_model or not old_attachment.res_id:
+                        attachments_to_unlink |= old_attachment
+                if move_result.get('success') is True:
+                    document.write({
+                        'state': 'sent',
+                        'error': False,
+                        'blocking_level': False,
+                    })
+                else:
+                    document.write({
+                        'error': move_result.get('error', False),
+                        'blocking_level': move_result.get('blocking_level',
+                                                          DEFAULT_BLOCKING_LEVEL) if 'error' in move_result else False,
+                    })
+
+            # Attachments that are not explicitly linked to a business model could be removed because they are not
+            # supposed to have any traceability from the user.
+            attachments_to_unlink.unlink()
+
+        def _postprocess_cancel_edi_results(documents, edi_result):
+            invoice_ids_to_cancel = set()  # Avoid duplicates
+            attachments_to_unlink = self.env['ir.attachment']
+            for document in documents:
+                move = document.move_id
+                move_result = edi_result.get(move, {})
+                if move_result.get('success') is True:
+                    old_attachment = document.attachment_id
+                    document.write({
+                        'state': 'cancelled',
+                        'error': False,
+                        'attachment_id': False,
+                        'blocking_level': False,
+                    })
+
+                    if move.is_invoice(include_receipts=True) and move.state == 'posted':
+                        # The user requested a cancellation of the EDI and it has been approved. Then, the invoice
+                        # can be safely cancelled.
+                        invoice_ids_to_cancel.add(move.id)
+
+                    if not old_attachment.res_model or not old_attachment.res_id:
+                        attachments_to_unlink |= old_attachment
+
+                else:
+                    document.write({
+                        'error': move_result.get('error', False),
+                        'blocking_level': move_result.get('blocking_level', DEFAULT_BLOCKING_LEVEL) if move_result.get(
+                            'error') else False,
+                    })
+
+            if invoice_ids_to_cancel:
+                invoices = self.env['account.move'].browse(list(invoice_ids_to_cancel))
+                invoices.button_draft()
+                invoices.button_cancel()
+
+            # Attachments that are not explicitly linked to a business model could be removed because they are not
+            # supposed to have any traceability from the user.
+            attachments_to_unlink.unlink()
+
+        documents.edi_format_id.ensure_one()  # All account.edi.document of a job should have the same edi_format_id
+        documents.move_id.company_id.ensure_one()  # All account.edi.document of a job should be from the same company
+        if len(set(doc.state for doc in documents)) != 1:
+            raise ValueError('All account.edi.document of a job should have the same state')
+
+        edi_format = documents.edi_format_id
+        state = documents[0].state
+        if doc_type == 'invoice':
+            if state == 'to_send':
+                invoices = documents.move_id
+                with invoices._send_only_when_ready():
+                    _logger.info('Invoice to sign %s',invoices)
+                    edi_result = edi_format._post_invoice_edi(invoices)
+                    _logger.info("here to after sign after sign %s", edi_result)
+                    _postprocess_post_edi_results(documents, edi_result)
+            elif state == 'to_cancel':
+                edi_result = edi_format._cancel_invoice_edi(documents.move_id)
+                _postprocess_cancel_edi_results(documents, edi_result)
+
+        elif doc_type == 'payment':
+            if state == 'to_send':
+                edi_result = edi_format._post_payment_edi(documents.move_id)
+                _postprocess_post_edi_results(documents, edi_result)
+            elif state == 'to_cancel':
+                edi_result = edi_format._cancel_payment_edi(documents.move_id)
+                _postprocess_cancel_edi_results(documents, edi_result)
+
+class EtaThumbDrive(models.Model):
+    _inherit = 'l10n_eg_edi.thumb.drive'
+
+    def action_sign_invoices(self, invoice_ids):
+        self.ensure_one()
+        sign_host = self._get_host()
+
+        to_sign_dict = dict()
+        for invoice_id in invoice_ids:
+            # if invoice_id.l10n_eg_is_signed and not invoice_id.edi_error_message in ["An error occured in created the ETA invoice, please retry signing","Please make sure the invoice is signed"]:
+            #     _logger.info("invoice not to sign %s",invoice_id.name)
+            #     continue
+            eta_invoice = json.loads(invoice_id.l10n_eg_eta_json_doc_id.raw)['request']
+            signed_attrs = self._generate_signed_attrs(eta_invoice, invoice_id.l10n_eg_signing_time)
+            to_sign_dict[invoice_id.id] = base64.b64encode(signed_attrs.dump()).decode()
+        _logger.info("to_sign_dictn %s", json.dumps(to_sign_dict))
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'action_post_sign_invoice',
+            'params': {
+                'sign_host': sign_host,
+                'access_token': self.access_token,
+                'pin': self.pin,
+                'drive_id': self.id,
+                'invoices': json.dumps(to_sign_dict)
+            }
+        }
+
+    def set_signature_data(self, invoices):
+        """ This is called from the browser with the signed data from the local server """
+        invoices = json.loads(invoices)
+
+        for key, value in invoices.items():
+            invoice_id = self.env['account.move'].browse(int(key))
+            # if invoice_id.l10n_eg_is_signed or  invoice_id.edi_error_message not in ["An error occured in created the ETA invoice, please retry signing","Please make sure the invoice is signed"]:
+            #     _logger.info("will not update signature %s",invoice_id.name)
+            #     continue
+            eta_invoice_json = json.loads(invoice_id.l10n_eg_eta_json_doc_id.raw)
+
+            cades_bes = self._generate_cades_bes_signature(eta_invoice_json['request'], invoice_id.l10n_eg_signing_time,
+                                                           base64.b64decode(value))
+            signature = base64.b64encode(cades_bes.dump()).decode()
+
+            eta_invoice_json['request']['signatures'] = [{'signatureType': 'I', 'value': signature}]
+            invoice_id.l10n_eg_eta_json_doc_id.raw = json.dumps(eta_invoice_json)
+            invoice_id.l10n_eg_is_signed = True
+        return True
+
+
+
+class AccountMove(models.Model):
+    _inherit = 'account.move'
+    edi_error_count = fields.Integer(
+        compute='_compute_edi_error_count',
+        help='How many EDIs are in error for this move ?',store=True)
+
+    edi_error_message = fields.Html(
+        compute='_compute_edi_error_message',store=True)
