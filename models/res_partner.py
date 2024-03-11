@@ -4,10 +4,10 @@ from odoo import fields, models, api
 class Partner(models.Model):
     _inherit = 'res.partner'
     discount_type = fields.Selection(
-        [("fixed", "Fixed"), ("percentage", "Percentage")], string = "Discount Type",track_visibility='onchange'
+        [("fixed", "Fixed"), ("percentage", "Percentage")], string = "Discount Type",tracking=True
     )
 
-    discount_amount = fields.Float("Discount Amount",track_visibility='onchange')
+    discount_amount = fields.Float("Discount Amount",tracking=True)
 
     @api.onchange('child_ids', 'discount_type', 'discount_amount')
     def child_discount(self):
