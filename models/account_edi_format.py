@@ -38,8 +38,8 @@ class AccountEdiFormat(models.Model):
             'netAmount': self._l10n_eg_edi_round(
                 totals['total_price_subtotal_before_discount'] - totals['discount_total']),
             'totalAmount': self._l10n_eg_edi_round(abs(invoice.amount_total_signed)),
-            'extraDiscountAmount': self._l10n_eg_edi_round(abs(invoice.discount)),
-            'totalItemsDiscountAmount': 0.0,
+            'extraDiscountAmount': self._l10n_eg_edi_round(abs(invoice.promotion_discount)),
+            'totalItemsDiscountAmount': self._l10n_eg_edi_round(totals['fixed_discount_total']),
         })
         if invoice.ref:
             eta_invoice['purchaseOrderReference'] = invoice.ref
@@ -56,6 +56,7 @@ class AccountEdiFormat(models.Model):
         totals = {
             'discount_total': 0.0,
             'total_price_subtotal_before_discount': 0.0,
+            'fixed_discount_total':0.0,
         }
         for line in invoice.invoice_line_ids.filtered(lambda x: not ('discount' in x.name.lower())):
             line_tax_details = tax_data.get(line, {})
@@ -64,6 +65,7 @@ class AccountEdiFormat(models.Model):
             price_subtotal_before_discount = self._l10n_eg_edi_round(abs(line.balance / (
                     1 - (line.discount / 100)))) if line.discount != 100.0 else price_unit * line.quantity
             discount_amount = self._l10n_eg_edi_round(price_subtotal_before_discount - abs(line.balance))
+
             item_code = line.product_id.l10n_eg_eta_code or line.product_id.barcode
             lines.append({
                 'description': line.name,
@@ -74,7 +76,7 @@ class AccountEdiFormat(models.Model):
                 'internalCode': line.product_id.default_code or '',
                 'valueDifference': 0.0,
                 'totalTaxableFees': 0.0,
-                'itemsDiscount': 0.0,
+                'itemsDiscount': line.promotion_discount_unit*line.quantity,
                 'unitValue': {
                     'currencySold': invoice.currency_id.name,
                     'amountEGP': price_unit,
@@ -99,6 +101,7 @@ class AccountEdiFormat(models.Model):
             })
             totals['discount_total'] += discount_amount  # before taxes
             totals['total_price_subtotal_before_discount'] += price_subtotal_before_discount
+            totals['fixed_discount_total'] += line.promotion_discount_unit*line.quantity
             if invoice.currency_id != self.env.ref('base.EGP'):
                 lines[-1]['unitValue']['currencyExchangeRate'] = self._l10n_eg_edi_round(
                     invoice._l10n_eg_edi_exchange_currency_rate())

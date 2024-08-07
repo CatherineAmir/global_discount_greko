@@ -20,7 +20,7 @@
     'version': '0.1',
 
     # any module necessary for this one to work correctly
-    'depends': ['base','l10n_eg_edi_eta','global_discount_sale','greko'],
+    'depends': ['base','l10n_eg_edi_eta','global_discount_sale','greko','sales_coupons_on_delivery'],
 
     # always loaded
     'data': [
@@ -31,4 +31,10 @@
     'demo': [
         'demo/demo.xml',
     ],
+
+    # 'assets': {
+    #     'web.assets_backend': [
+    #         'sita_discount_eta/static/src/js/sign_invoice.js',
+    #     ],
+    # },
 }
