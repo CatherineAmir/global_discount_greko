@@ -13,6 +13,11 @@ class AccountEdiFormat(models.Model):
             return {'l10n_eg_eta_code': tax_values['tax_id'].l10n_eg_eta_code.split('_')[0]}
 
         invoice.calculate_total_discount()
+        # if invoice.promotion_discount==0 and invoice.customer_discount==0 and invoice.discount:
+        #     extra_discount=abs(invoice.discount)
+        # else:
+        #     extra_discount=0
+
         date_string = invoice.invoice_date.strftime('%Y-%m-%dT%H:%M:%SZ')
         grouped_taxes = invoice._prepare_edi_tax_details(grouping_key_generator=group_tax_retention)
         invoice_line_data, totals = self._l10n_eg_eta_prepare_invoice_lines_data(invoice, grouped_taxes[
@@ -38,7 +43,7 @@ class AccountEdiFormat(models.Model):
             'netAmount': self._l10n_eg_edi_round(
                 totals['total_price_subtotal_before_discount'] - totals['discount_total']),
             'totalAmount': self._l10n_eg_edi_round(abs(invoice.amount_total_signed)),
-            'extraDiscountAmount': 0.0,
+            'extraDiscountAmount': self._l10n_eg_edi_round(abs(invoice.extra_discount)),
             'totalItemsDiscountAmount': self._l10n_eg_edi_round(totals['fixed_discount_total']),
         })
         if invoice.ref:
