@@ -58,6 +58,7 @@ class AccountEdiFormat(models.Model):
     @api.model
     def _l10n_eg_eta_prepare_invoice_lines_data(self, invoice, tax_data):
         lines = []
+        invoice.recompute_coupon_lines()
         totals = {
             'discount_total': 0.0,
             'total_price_subtotal_before_discount': 0.0,
